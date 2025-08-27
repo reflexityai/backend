@@ -3,16 +3,24 @@ name = "reflexity-backend"
 version = "0.1.0"
 description = "AI application"
 authors = [
-    {name = "Dhruv2617",email = "dhruvanand2617@gmail.com"}
+    {name = "Dhruv Anand",email = "dhruv@cellstrat.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "fastapi (>=0.116.1,<0.117.0)",
     "uvicorn (>=0.35.0,<0.36.0)",
-    "pydantic (>=2.11.7,<3.0.0)"
+    "pydantic (>=2.11.7,<3.0.0)",
+    "pandas (>=2.0.0,<3.0.0)",
+    "openpyxl (>=3.1.0,<4.0.0)",
+    "pg8000 (>=1.30.0,<2.0.0)",
+    "python-multipart (>=0.0.6,<1.0.0)",
+    "python-dotenv (>=1.0.0,<2.0.0)",
+    "sqlalchemy (>=2.0.0,<3.0.0)"
 ]
 
+[tool.poetry]
+package-mode = false
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
