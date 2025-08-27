@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 import io 
 from sqlalchemy import create_engine
+import time
 
 # Load environment variables
 load_dotenv()
@@ -125,6 +126,8 @@ async def ingest_file(file: UploadFile = File(...)):
         try:
             # Step 7a: Bulk insert using pandas to_sql
             # Use pandas to_sql for bulk insertion (much faster)
+            start_time = time.time()
+            print("ingesting data.....")
             result = df.to_sql(
                 name=table_name,
                 con=engine,
@@ -134,6 +137,8 @@ async def ingest_file(file: UploadFile = File(...)):
                 method='multi',  # Use multi-row insert
                 chunksize=1000  # Process in chunks of 1000
             )
+            end_time = time.time()
+            print(f"Time taken: {end_time - start_time} seconds")
 
             # verify the data
             if result == len(df):
