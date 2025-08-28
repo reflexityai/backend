@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from datetime import datetime
 import io 
 from sqlalchemy import create_engine
-import time
 import logging
 import json
 import asyncio
@@ -29,7 +28,7 @@ def get_supabase_client() -> Client:
     return create_client(url, key)
 
 # Utility functions (TODO: regex)
-def sanitize_string(input_string: str, to_lowercase: bool = False) -> str:
+def sanitize_string(input_string: str, to_lowercase: bool = True) -> str:
     """
     Sanitize string for safe database naming (table names, column names, etc.)
     
