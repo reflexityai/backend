@@ -14,7 +14,7 @@ load_dotenv()
 
 app = FastAPI()
 
-# Utility functions
+# Utility functions (TODO: regex)
 def sanitize_string(input_string: str, to_lowercase: bool = False) -> str:
     """
     Sanitize string for safe database naming (table names, column names, etc.)
@@ -130,7 +130,7 @@ async def ingest_file(file: UploadFile = File(...)):
             print("ingesting data.....")
             result = df.to_sql(
                 name=table_name,
-                con=engine,
+                con=engine,  # TODO: use pg800
                 schema='raw',
                 if_exists='replace',  # Replace if table exists
                 index=False,  # Don't include DataFrame index
