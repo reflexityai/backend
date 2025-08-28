@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import JSONResponse
 import pandas as pd
 import pg8000
@@ -7,27 +7,52 @@ from dotenv import load_dotenv
 from datetime import datetime
 import io 
 from sqlalchemy import create_engine
-import time
+import logging
+import json
+import asyncio
+from supabase import create_client, Client
+import re
 
 # Load environment variables
 load_dotenv()
 
+# Initialize FastAPI app
 app = FastAPI()
 
-# Utility functions (TODO: regex)
-def sanitize_string(input_string: str, to_lowercase: bool = False) -> str:
+# Initialize Supabase client
+def get_supabase_client() -> Client:
+    """Create and return Supabase client"""
+    url: str = os.environ.get("SUPABASE_URL")
+    key: str = os.environ.get("SERVICE_ROLE_KEY")
+    if not url or not key:
+        raise HTTPException(status_code=500, detail="Supabase configuration missing")
+    return create_client(url, key)
+
+def sanitize_string(input_string: str, to_lowercase: bool = True) -> str:
     """
     Sanitize string for safe database naming (table names, column names, etc.)
     
     Args:
         input_string: The string to sanitize
-        to_lowercase: Whether to convert to lowercase (default: False)
+        to_lowercase: Whether to convert to lowercase (default: True)
     
     Returns:
-        Sanitized string with dots, hyphens, and spaces replaced with underscores
+        Sanitized string with all special characters replaced with underscores
     """
-    sanitized = input_string.replace('.', '_').replace('-', '_').replace(' ', '_')
+    
+    # Use regex to replace all non-alphanumeric characters with underscores
+    # This includes: spaces, dots, hyphens, commas, parentheses, brackets, etc.
+    sanitized = re.sub(r'[^a-zA-Z0-9]', '_', input_string)
+    
+    # Remove multiple consecutive underscores
+    sanitized = re.sub(r'_+', '_', sanitized)
+    
+    # Remove leading and trailing underscores
+    sanitized = sanitized.strip('_')
+    
+    # Convert to lowercase if requested
     result = sanitized.lower() if to_lowercase else sanitized
+    
     return result
 
 # Database connection function
@@ -77,26 +102,81 @@ def ensure_raw_schema():
 async def root():
     return {"message": "Hello from Reflexity Backend!"}
 
-@app.post("/api/ingest-file")
-async def ingest_file(file: UploadFile = File(...)):
+@app.post("/api/upload-webhook")
+async def upload_webhook(request: Request):
     """
-    Ingest CSV or XLSX file and store in database under raw schema
+    Handle webhook from Supabase storage
     """
-        
-    # Step 1: Validate file
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file provided")
-    file_extension = file.filename.lower().split('.')[-1]
-    if file_extension not in ['csv', 'xlsx', 'xls']:
-        raise HTTPException(
-            status_code=400, 
-            detail="Unsupported file type. Please upload CSV or Excel files only."
-        )
-    
     try:
-        # Step 2: Read file content(bytes) and convert to BytesIO object
-        file_content = await file.read()
-        file_buffer = io.BytesIO(file_content)  
+        # Get the raw body
+        body = await request.body()
+        body_str = body.decode()
+        
+        # Parse the webhook payload
+        try:
+            webhook_data = json.loads(body_str)
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {e}")
+        
+        # Check if this is an INSERT event for the "raw" bucket
+        if (webhook_data.get("type") == "INSERT" and 
+            webhook_data.get("table") == "objects" and
+            webhook_data.get("record", {}).get("bucket_id") == "raw"):
+            
+            record = webhook_data.get("record", {})
+            file_name = record.get("name")
+            file_path = "/".join(record.get("path_tokens", []))
+            
+            if not file_name or not file_path:
+                raise HTTPException(status_code=400, detail="Missing file information")
+            
+            # Process the file in background
+            try:
+                # Start background task
+                asyncio.create_task(process_uploaded_file(file_name, file_path))
+                
+                # Return immediate response
+                return JSONResponse(
+                    status_code=202, 
+                    content={
+                        "message": "File processing started",
+                        "file_name": file_name,
+                        "file_path": file_path,
+                        "status": "processing"
+                    }
+                )
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error starting file processing: {str(e)}")
+        
+        return JSONResponse(status_code=200, content={"message": "Webhook received (not a raw bucket INSERT)"})
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {e}")
+
+async def process_uploaded_file(file_name: str, file_path: str) -> dict:
+    """
+    Process uploaded file from Supabase storage similar to ingest_file function
+    """
+    try:
+        # Step 1: Validate file
+        if not file_name:
+            raise HTTPException(status_code=400, detail="No file name provided")
+        
+        file_extension = file_name.lower().split('.')[-1]
+        if file_extension not in ['csv', 'xlsx', 'xls']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {file_extension}. Please upload CSV or Excel files only."
+            )
+        
+        # Step 2: Fetch file from Supabase storage
+        supabase = get_supabase_client()
+        
+        # Download the file from storage
+        file_content = supabase.storage.from_("raw").download(file_path)
+        
+        # Convert to BytesIO object
+        file_buffer = io.BytesIO(file_content)
         
         # Step 3: Parse file
         if file_extension == 'csv':
@@ -114,7 +194,8 @@ async def ingest_file(file: UploadFile = File(...)):
         
         # Step 5: Generate table name
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_filename = sanitize_string(file.filename)
+        filename_with_ext = file_name.split('/')[-1]
+        safe_filename = sanitize_string(filename_with_ext)        
         table_name = f"raw_{safe_filename}_{timestamp}"
         
         # Step 6: Clean column names
@@ -126,8 +207,7 @@ async def ingest_file(file: UploadFile = File(...)):
         try:
             # Step 7a: Bulk insert using pandas to_sql
             # Use pandas to_sql for bulk insertion (much faster)
-            start_time = time.time()
-            print("ingesting data.....")
+            logging.info(f"Ingesting data into table: {table_name}")
             result = df.to_sql(
                 name=table_name,
                 con=engine,  # TODO: use pg800
@@ -137,16 +217,14 @@ async def ingest_file(file: UploadFile = File(...)):
                 method='multi',  # Use multi-row insert
                 chunksize=1000  # Process in chunks of 1000
             )
-            end_time = time.time()
-            print(f"Time taken: {end_time - start_time} seconds")
 
-            # verify the data
+            # Step 7b: Verify the data
             if result == len(df):
-                print("✅ Data ingested successfully")
+                logging.info(f"File {file_name} processed successfully. Table: {table_name}, Rows: {result}")
             elif result != 0:
-                print("❌ Data ingestion failed, but some rows were ingested")
+                logging.warning(f"File {file_name} partially processed. Table: {table_name}, Rows: {result}")
             else:
-                print("❌ Data ingestion failed")
+                raise HTTPException(status_code=500, detail=f"File {file_name} processing failed. Table: {table_name}")
             
             # Step 8: Return success response
             response_data = {
@@ -154,13 +232,11 @@ async def ingest_file(file: UploadFile = File(...)):
                 "table_name": table_name,
                 "rows_processed": len(df),
                 "columns": list(df.columns),
-                "file_name": file.filename,
-                "verified_rows": result
+                "file_name": file_name,
+                "verified_rows": result,
+                "source": "webhook"
             }
-            return JSONResponse(
-                status_code=200,
-                content=response_data
-            )
+            return response_data
             
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Database operation failed: {str(e)}")
@@ -170,9 +246,7 @@ async def ingest_file(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File processing failed: {str(e)}")
 
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-
-# Add this for Vercel
-app.debug = True
