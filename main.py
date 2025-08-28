@@ -178,9 +178,8 @@ async def upload_webhook(request: Request):
     """
     Handle webhook from Supabase storage
     """
-    data = await request.json()
-    logging.info(data)
-    print(data)
+    logging.info(request)
+    print(request)
     return JSONResponse(status_code=200, content={"message": "Webhook received"})
 
 if __name__ == "__main__":
