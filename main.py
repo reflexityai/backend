@@ -11,6 +11,7 @@ import logging
 import json
 import asyncio
 from supabase import create_client, Client
+import re
 
 # Load environment variables
 load_dotenv()
@@ -27,20 +28,31 @@ def get_supabase_client() -> Client:
         raise HTTPException(status_code=500, detail="Supabase configuration missing")
     return create_client(url, key)
 
-# Utility functions (TODO: regex)
 def sanitize_string(input_string: str, to_lowercase: bool = True) -> str:
     """
     Sanitize string for safe database naming (table names, column names, etc.)
     
     Args:
         input_string: The string to sanitize
-        to_lowercase: Whether to convert to lowercase (default: False)
+        to_lowercase: Whether to convert to lowercase (default: True)
     
     Returns:
-        Sanitized string with dots, hyphens, and spaces replaced with underscores
+        Sanitized string with all special characters replaced with underscores
     """
-    sanitized = input_string.replace('.', '_').replace('-', '_').replace(' ', '_')
+    
+    # Use regex to replace all non-alphanumeric characters with underscores
+    # This includes: spaces, dots, hyphens, commas, parentheses, brackets, etc.
+    sanitized = re.sub(r'[^a-zA-Z0-9]', '_', input_string)
+    
+    # Remove multiple consecutive underscores
+    sanitized = re.sub(r'_+', '_', sanitized)
+    
+    # Remove leading and trailing underscores
+    sanitized = sanitized.strip('_')
+    
+    # Convert to lowercase if requested
     result = sanitized.lower() if to_lowercase else sanitized
+    
     return result
 
 # Database connection function
