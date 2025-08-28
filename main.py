@@ -178,9 +178,26 @@ async def upload_webhook(request: Request):
     """
     Handle webhook from Supabase storage
     """
-    logging.info(request)
-    print(request)
-    return JSONResponse(status_code=200, content={"message": "Webhook received"})
+    try:
+        # Get the raw body
+        body = await request.body()
+        
+        # Log the actual webhook payload
+        logging.info(f"Webhook body: {body.decode()}")
+        print(f"Webhook body: {body.decode()}")
+        
+        # Also log headers for debugging
+        headers = dict(request.headers)
+        logging.info(f"Webhook headers: {headers}")
+        print(f"Webhook headers: {headers}")
+        
+        return JSONResponse(status_code=200, content={"message": "Webhook received"})
+        
+    except Exception as e:
+        logging.error(f"Error: {e}")
+        print(f"Error: {e}")
+        return JSONResponse(status_code=500, content={"message": "Error"})
+    
 
 if __name__ == "__main__":
     import uvicorn
