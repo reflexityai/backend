@@ -8,6 +8,8 @@ from datetime import datetime
 import io 
 from sqlalchemy import create_engine
 import time
+from fastapi import Request
+import logging
 
 # Load environment variables
 load_dotenv()
@@ -169,6 +171,17 @@ async def ingest_file(file: UploadFile = File(...)):
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File processing failed: {str(e)}")
+    
+
+@app.post("/api/upload-webhook")
+async def upload_webhook(request: Request):
+    """
+    Handle webhook from Supabase storage
+    """
+    data = await request.json()
+    logging.info(data)
+    print(data)
+    return JSONResponse(status_code=200, content={"message": "Webhook received"})
 
 if __name__ == "__main__":
     import uvicorn
