@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 import pandas as pd
 import pg8000
@@ -7,9 +7,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 import io 
 from sqlalchemy import create_engine
-import logging
 import json
-import asyncio
 from supabase import create_client, Client
 import re
 import logfire
@@ -141,20 +139,20 @@ async def upload_webhook(request: Request):
                 
                 # Process the file in background
                 try:
-                    # Start background task
-                    logfire.info("Starting background task", file_name=file_name,file_path=file_path)
-                    asyncio.create_task(process_uploaded_file(file_name, file_path))
+
+                    result = await process_uploaded_file(file_name, file_path)
                     
                     response_data = {
-                        "message": "File processing started",
+                        "message": "File processed successfully",
                         "file_name": file_name,
                         "file_path": file_path,
-                        "status": "processing"
+                        "status": "completed",
+                        "result": result
                     }
                     
                     # Return immediate response
-                    logfire.info("Webhook response sent", response_data=response_data,status_code=202)
-                    return JSONResponse(status_code=202, content=response_data)
+                    logfire.info("File processing completed", response_data=response_data, status_code=200)
+                    return JSONResponse(status_code=200, content=response_data)
                     
                 except Exception as e:
                     raise HTTPException(status_code=500, detail=f"Error starting file processing: {str(e)}")
