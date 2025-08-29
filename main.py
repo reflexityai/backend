@@ -224,17 +224,17 @@ async def process_uploaded_file(file_name: str, file_path: str) -> dict:
             
             try:
                 # Step 7a: Bulk insert using pandas to_sql
-                with logfire.span("bulk_insert", table_name=table_name,rows_to_insert=len(df),chunk_size=1000):
-                    result = df.to_sql(
-                        name=table_name,
-                        con=engine,
-                        schema='raw',
-                        if_exists='replace',
-                        index=False,
-                        method='multi',
-                        chunksize=1000
-                    )
-                    logfire.force_flush()
+                logfire.info("Starting bulk insert", table_name=table_name,rows_to_insert=len(df),chunk_size=1000)
+                result = df.to_sql(
+                    name=table_name,
+                    con=engine,
+                    schema='raw',
+                    if_exists='replace',
+                    index=False,
+                    method='multi',
+                    chunksize=1000
+                )
+                logfire.info("Bulk insert completed", table_name=table_name,rows_inserted=result)
 
 
                 # Step 7b: Verify the data
