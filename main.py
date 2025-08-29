@@ -20,7 +20,7 @@ load_dotenv()
 # Initialize FastAPI app
 app = FastAPI()
 
-logfire.configure()
+logfire.configure(token=os.getenv("LOGFIRE_TOKEN"))
 logfire.instrument_fastapi(app)
 
 # Initialize Supabase client
