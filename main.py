@@ -76,6 +76,7 @@ def get_sqlalchemy_engine():
         connection_string = f"postgresql+pg8000://{os.getenv('user')}:{os.getenv('password')}@{os.getenv('host')}:{os.getenv('port')}/{os.getenv('dbname')}"
         engine = create_engine(connection_string)
         logfire.info("SQLAlchemy engine created successfully")
+        logfire.instrument_sqlalchemy(engine=engine)
         return engine
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"SQLAlchemy engine creation failed: {str(e)}")

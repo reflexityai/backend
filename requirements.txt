@@ -8,4 +8,4 @@ python-multipart>=0.0.6,<1.0.0
 python-dotenv>=1.0.0,<2.0.0
 sqlalchemy>=2.0.0,<3.0.0
 supabase>=1.2.0,<2.0.0
-logfire[fastapi]>=4.3.6,<5.0.0
+logfire[fastapi,sqlalchemy]>=4.3.6,<5.0.0
