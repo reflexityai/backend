@@ -234,6 +234,7 @@ async def process_uploaded_file(file_name: str, file_path: str) -> dict:
                         method='multi',
                         chunksize=1000
                     )
+                    logfire.force_flush()
 
 
                 # Step 7b: Verify the data
